@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum TimeUnit {
+  MINUTES
+  HOURS
+  DAYS
+}
+
+model TodoList {
+  id         Int        @id @default(autoincrement())
+  name       String
+  position   Int        @default(0)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  activities Activity[]
+
+  @@map("todo_lists")
+}
+
+model Activity {
+  id               Int       @id @default(autoincrement())
+  listId           Int
+  // Actividad padre dentro de la misma lista. NULL = actividad principal.
+  parentId         Int?
+  name             String
+  position         Int       @default(0)
+  // Horario: solo lo tienen las tareas finales (sin hijas). Puede faltar ("sin horario").
+  startDate        DateTime?
+  estimatedAmount  Float?
+  estimatedUnit    TimeUnit?
+  estimatedEndDate DateTime?
+  actualEndDate    DateTime?
+  // Observación libre y opcional.
+  observation      String?   @db.Text
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  list     TodoList   @relation(fields: [listId], references: [id], onDelete: Cascade)
+  parent   Activity?  @relation("ActivityHierarchy", fields: [parentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  children Activity[] @relation("ActivityHierarchy")
+  completionNotes CompletionNote[]
+
+  @@index([listId])
+  @@index([parentId])
+  @@index([actualEndDate])
+  @@map("activities")
+}
+
+
+// Observaciones cargadas al finalizar una tarea (una por renglón).
+model CompletionNote {
+  id         Int      @id @default(autoincrement())
+  activityId Int
+  text       String   @db.Text
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([activityId])
+  @@map("activity_completion_notes")
+}
