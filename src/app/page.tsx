@@ -34,6 +34,29 @@ import {
 } from "@/lib/activityTree";
 import ActivityTreeView, { AllListsTreeView } from "@/components/ActivityTreeView";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { MAX_ACTIVITY_NAME_LENGTH, MAX_LIST_NAME_LENGTH } from "@/lib/limits";
+
+/**
+ * fetch a la API de la app. Si la sesión venció (401), lleva al login.
+ * La sesión se renueva sola con cada pedido; solo vence tras el tiempo de inactividad.
+ */
+async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init);
+  if (res.status === 401) {
+    window.location.replace("/login");
+    // No se resuelve: la página ya se está yendo al login.
+    return new Promise<Response>(() => {});
+  }
+  return res;
+}
+
+async function handleLogout() {
+  try {
+    await fetch("/api/auth/logout", { method: "POST" });
+  } finally {
+    window.location.replace("/login");
+  }
+}
 
 export interface ActivityDTO {
   id: number;
@@ -217,7 +240,7 @@ export default function HomePage() {
     try {
       setLoadingLists(true);
       setGlobalError(null);
-      const res = await fetch("/api/lists", { cache: "no-store" });
+      const res = await apiFetch("/api/lists", { cache: "no-store" });
       if (!res.ok) {
         throw new Error("No se pudieron cargar las listas.");
       }
@@ -234,7 +257,7 @@ export default function HomePage() {
     async (period: CompletedFilterPeriod) => {
       try {
         setLoadingCompleted(true);
-        const res = await fetch(`/api/activities/completed?period=${period}`, {
+        const res = await apiFetch(`/api/activities/completed?period=${period}`, {
           cache: "no-store",
         });
         if (!res.ok) {
@@ -411,7 +434,7 @@ export default function HomePage() {
     setDraggedListId(null);
 
     try {
-      await fetch("/api/lists/reorder", {
+      await apiFetch("/api/lists/reorder", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderedIds: reordered.map((l) => l.id) }),
@@ -495,7 +518,7 @@ export default function HomePage() {
     setDraggedActivityId(null);
 
     try {
-      await fetch(`/api/lists/${selectedList.id}/activities/reorder`, {
+      await apiFetch(`/api/lists/${selectedList.id}/activities/reorder`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -519,7 +542,7 @@ export default function HomePage() {
 
     try {
       setSubmittingList(true);
-      const res = await fetch("/api/lists", {
+      const res = await apiFetch("/api/lists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: trimmed }),
@@ -557,7 +580,7 @@ export default function HomePage() {
 
     try {
       setSubmittingList(true);
-      const res = await fetch(`/api/lists/${renamingList.id}`, {
+      const res = await apiFetch(`/api/lists/${renamingList.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: trimmed }),
@@ -580,7 +603,7 @@ export default function HomePage() {
     if (!deletingList) return;
     try {
       setSubmittingList(true);
-      const res = await fetch(`/api/lists/${deletingList.id}`, {
+      const res = await apiFetch(`/api/lists/${deletingList.id}`, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -747,7 +770,7 @@ export default function HomePage() {
         : `/api/lists/${targetListId}/activities`;
       const method = editingActivity ? "PATCH" : "POST";
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -822,7 +845,7 @@ export default function HomePage() {
 
     try {
       setSubmittingMultiDay(true);
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/activities/${multiDayActivity.id}/multi-days`,
         {
           method: "POST",
@@ -893,7 +916,7 @@ export default function HomePage() {
     );
 
     try {
-      const res = await fetch(`/api/activities/${act.id}`, {
+      const res = await apiFetch(`/api/activities/${act.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ startDate: newStart.toISOString() }),
@@ -968,7 +991,7 @@ export default function HomePage() {
     try {
       setSavingCalendarChecks(true);
       setCalendarCheckSuccess(null);
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/activities/${selectedCalendarCheckActivity.id}/multi-days`,
         {
           method: "POST",
@@ -1049,7 +1072,7 @@ export default function HomePage() {
 
     try {
       setSubmittingFinalize(true);
-      const res = await fetch(`/api/activities/${finalizingActivity.id}`, {
+      const res = await apiFetch(`/api/activities/${finalizingActivity.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1082,7 +1105,7 @@ export default function HomePage() {
     if (!deletingActivity) return;
     try {
       setSubmittingActivity(true);
-      const res = await fetch(`/api/activities/${deletingActivity.id}`, {
+      const res = await apiFetch(`/api/activities/${deletingActivity.id}`, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -1193,6 +1216,13 @@ export default function HomePage() {
                 }`}
             >
               Calendario
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 hover:text-rose-700 transition"
+            >
+              Cerrar sesión
             </button>
           </nav>
         </div>
@@ -2569,6 +2599,7 @@ export default function HomePage() {
                 <input
                   type="text"
                   value={newListName}
+                  maxLength={MAX_LIST_NAME_LENGTH}
                   onChange={(e) => setNewListName(e.target.value)}
                   placeholder="Ej: Proyecto Web, Estudio, Hogar..."
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
@@ -2616,6 +2647,7 @@ export default function HomePage() {
                 <input
                   type="text"
                   value={renameValue}
+                  maxLength={MAX_LIST_NAME_LENGTH}
                   onChange={(e) => setRenameValue(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
                   autoFocus
@@ -2699,6 +2731,7 @@ export default function HomePage() {
                 <input
                   type="text"
                   value={actName}
+                  maxLength={MAX_ACTIVITY_NAME_LENGTH}
                   onChange={(e) => setActName(e.target.value)}
                   placeholder="Ej: Diseñar base de datos"
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"

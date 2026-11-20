@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSessionUser, unauthorized } from "@/lib/auth/currentUser";
 
 export async function PUT(request: NextRequest) {
   try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+
     const body = await request.json();
     const orderedIds: number[] = Array.isArray(body?.orderedIds)
       ? body.orderedIds.map(Number).filter((id: number) => !Number.isNaN(id))
@@ -17,8 +21,9 @@ export async function PUT(request: NextRequest) {
 
     await prisma.$transaction(
       orderedIds.map((id, index) =>
-        prisma.todoList.update({
-          where: { id },
+        // updateMany con el dueño: las listas de otros usuarios se ignoran
+        prisma.todoList.updateMany({
+          where: { id, userId: user.userId },
           data: { position: index },
         })
       )

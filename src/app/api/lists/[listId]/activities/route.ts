@@ -7,6 +7,8 @@ import {
   parseParentId,
   validateParent,
 } from "@/lib/activityHierarchy";
+import { getSessionUser, unauthorized } from "@/lib/auth/currentUser";
+import { MAX_ACTIVITY_NAME_LENGTH } from "@/lib/limits";
 
 type RouteParams = { params: Promise<{ listId: string }> };
 
@@ -21,13 +23,16 @@ function toLocalDateKey(d: Date): string {
 
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+
     const { listId } = await params;
     const id = Number(listId);
     if (Number.isNaN(id)) {
       return NextResponse.json({ error: "ID de lista inválido." }, { status: 400 });
     }
 
-    const list = await prisma.todoList.findUnique({ where: { id } });
+    const list = await prisma.todoList.findFirst({ where: { id, userId: user.userId } });
     if (!list) {
       return NextResponse.json({ error: "Lista no encontrada." }, { status: 404 });
     }
@@ -49,13 +54,16 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+
     const { listId } = await params;
     const id = Number(listId);
     if (Number.isNaN(id)) {
       return NextResponse.json({ error: "ID de lista inválido." }, { status: 400 });
     }
 
-    const list = await prisma.todoList.findUnique({ where: { id } });
+    const list = await prisma.todoList.findFirst({ where: { id, userId: user.userId } });
     if (!list) {
       return NextResponse.json({ error: "Lista no encontrada." }, { status: 404 });
     }
@@ -74,6 +82,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (!name) {
       return NextResponse.json(
         { error: "El nombre de la actividad es obligatorio." },
+        { status: 400 }
+      );
+    }
+
+    if (name.length > MAX_ACTIVITY_NAME_LENGTH) {
+      return NextResponse.json(
+        { error: `El nombre de la actividad no puede superar los ${MAX_ACTIVITY_NAME_LENGTH} caracteres.` },
         { status: 400 }
       );
     }
@@ -135,6 +150,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return tx.activity.create({
         data: {
           listId: id,
+          userId: user.userId,
           parentId: parentId ?? null,
           name,
           observation,
@@ -195,6 +211,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         await prisma.activity.create({
           data: {
             listId: id,
+            userId: user.userId,
             parentId: parentId ?? null,
             name,
             observation,

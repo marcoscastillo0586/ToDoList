@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { COMPLETION_NOTES_INCLUDE } from "@/lib/activityHierarchy";
+import { getSessionUser, unauthorized } from "@/lib/auth/currentUser";
+import { MAX_LIST_NAME_LENGTH } from "@/lib/limits";
 
 type RouteParams = { params: Promise<{ listId: string }> };
 
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+
     const { listId } = await params;
     const id = Number(listId);
     if (Number.isNaN(id)) {
       return NextResponse.json({ error: "ID de lista inválido." }, { status: 400 });
     }
 
-    const list = await prisma.todoList.findUnique({
-      where: { id },
+    const list = await prisma.todoList.findFirst({
+      where: { id, userId: user.userId },
       include: {
         activities: {
           orderBy: [{ startDate: "asc" }, { position: "asc" }],
@@ -38,6 +43,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+
     const { listId } = await params;
     const id = Number(listId);
     if (Number.isNaN(id)) {
@@ -53,8 +61,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+    if (name.length > MAX_LIST_NAME_LENGTH) {
+      return NextResponse.json(
+        { error: `El nombre de la lista no puede superar los ${MAX_LIST_NAME_LENGTH} caracteres.` },
+        { status: 400 }
+      );
+    }
 
-    const existing = await prisma.todoList.findUnique({ where: { id } });
+    const existing = await prisma.todoList.findFirst({ where: { id, userId: user.userId } });
     if (!existing) {
       return NextResponse.json({ error: "Lista no encontrada." }, { status: 404 });
     }
@@ -82,13 +96,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+
     const { listId } = await params;
     const id = Number(listId);
     if (Number.isNaN(id)) {
       return NextResponse.json({ error: "ID de lista inválido." }, { status: 400 });
     }
 
-    const existing = await prisma.todoList.findUnique({ where: { id } });
+    const existing = await prisma.todoList.findFirst({ where: { id, userId: user.userId } });
     if (!existing) {
       return NextResponse.json({ error: "Lista no encontrada." }, { status: 404 });
     }

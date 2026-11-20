@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSessionUser, unauthorized } from "@/lib/auth/currentUser";
 
 type RouteParams = { params: Promise<{ listId: string }> };
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+
     const { listId } = await params;
     const id = Number(listId);
     if (Number.isNaN(id)) {
@@ -26,7 +30,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     await prisma.$transaction(
       orderedIds.map((activityId, index) =>
         prisma.activity.updateMany({
-          where: { id: activityId, listId: id },
+          where: { id: activityId, listId: id, userId: user.userId },
           data: { position: index },
         })
       )

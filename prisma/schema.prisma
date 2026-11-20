@@ -15,18 +15,27 @@ enum TimeUnit {
 
 model TodoList {
   id         Int        @id @default(autoincrement())
+  // Dueño de la tarjeta: cada usuario ve solo las suyas.
+  userId     Int        @map("user_id")
   name       String
   position   Int        @default(0)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   activities Activity[]
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Permite que la actividad apunte a (lista, dueño) y así tenga siempre el mismo dueño que su lista.
+  @@unique([id, userId])
+  @@index([userId])
   @@map("todo_lists")
 }
 
 model Activity {
   id               Int       @id @default(autoincrement())
   listId           Int
+  // Dueño: siempre el mismo que el de su lista (lo garantiza la clave foránea compuesta).
+  userId           Int       @map("user_id")
   // Actividad padre dentro de la misma lista. NULL = actividad principal.
   parentId         Int?
   name             String
@@ -42,17 +51,71 @@ model Activity {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  list     TodoList   @relation(fields: [listId], references: [id], onDelete: Cascade)
+  list     TodoList   @relation(fields: [listId, userId], references: [id, userId], onDelete: Cascade)
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   parent   Activity?  @relation("ActivityHierarchy", fields: [parentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   children Activity[] @relation("ActivityHierarchy")
   completionNotes CompletionNote[]
 
   @@index([listId])
+  @@index([userId])
   @@index([parentId])
   @@index([actualEndDate])
   @@map("activities")
 }
 
+
+// ---------------------------------------------------------------------------
+// Autenticación
+// ---------------------------------------------------------------------------
+
+// Usuarios. No hay registro público: se cargan directamente en la base
+// (ver scripts/hash-password.mjs). La contraseña se guarda solo como hash bcrypt.
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique @db.VarChar(254)
+  passwordHash String   @map("password_hash") @db.VarChar(100)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sessions   Session[]
+  lists      TodoList[]
+  activities Activity[]
+
+  @@map("users")
+}
+
+// Sesiones activas. Se guarda el hash SHA-256 del token, nunca el token.
+model Session {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  tokenHash  String   @unique @map("token_hash") @db.Char(64)
+  expiresAt  DateTime @map("expires_at")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  ip         String?  @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.VarChar(255)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// Intentos de login (para limitar la fuerza bruta por correo y por IP).
+model LoginAttempt {
+  id        Int      @id @default(autoincrement())
+  email     String   @db.VarChar(254)
+  ip        String   @db.VarChar(45)
+  success   Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+  @@map("login_attempts")
+}
 
 // Observaciones cargadas al finalizar una tarea (una por renglón).
 model CompletionNote {

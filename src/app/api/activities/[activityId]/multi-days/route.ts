@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { calculateEstimatedEndDate } from "@/lib/timeUtils";
+import { getSessionUser, unauthorized } from "@/lib/auth/currentUser";
 
 type RouteParams = { params: Promise<{ activityId: string }> };
 
@@ -21,6 +22,9 @@ function normalizeStr(s: string): string {
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+
     const { activityId } = await params;
     const id = Number(activityId);
     if (Number.isNaN(id)) {
@@ -30,8 +34,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const found = await prisma.activity.findUnique({
-      where: { id },
+    const found = await prisma.activity.findFirst({
+      where: { id, userId: user.userId },
       include: { _count: { select: { children: true } } },
     });
     if (!found) {
@@ -143,6 +147,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       await prisma.activity.create({
         data: {
           listId: baseActivity.listId,
+          userId: user.userId,
           parentId: baseActivity.parentId,
           name: baseActivity.name,
           observation: baseActivity.observation,

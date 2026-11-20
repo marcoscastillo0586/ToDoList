@@ -63,14 +63,13 @@ export async function validateParent(
   parentId: number,
   activityId: number | null
 ): Promise<string | null> {
-  const parent = await db.activity.findUnique({
-    where: { id: parentId },
-    select: { id: true, listId: true },
+  // Se busca solo dentro de la lista (que ya se verificó que es del usuario):
+  // así no se revela si existe una actividad con ese id en la lista de otro usuario.
+  const parent = await db.activity.findFirst({
+    where: { id: parentId, listId },
+    select: { id: true },
   });
-  if (!parent) return "La actividad padre no existe.";
-  if (parent.listId !== listId) {
-    return "La actividad padre debe pertenecer a la misma lista.";
-  }
+  if (!parent) return "La actividad padre no existe en esta lista.";
   if (activityId !== null) {
     const listActivities = await db.activity.findMany({
       where: { listId },

@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "node --env-file-if-exists=.env scripts/start.mjs dev",
     "build": "next build",
-    "start": "next start -p 3001",
+    "start": "node --env-file-if-exists=.env scripts/start.mjs",
     "lint": "next lint",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/activityTree.test.ts"
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/activityTree.test.ts",
+    "hash-password": "node scripts/hash-password.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "bcryptjs": "^3.0.3",
     "lucide-react": "^1.70.0",
     "next": "^15.5.29",
     "react": "^19.3.1",
@@ -21,9 +23,17 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.6.2",
-    "postcss": "^8.5.32",
+    "postcss": "^8.5.33",
     "prisma": "^6.19.3",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=22.9"
+  },
+  "overrides": {
+    "postcss": "$postcss",
+    "effect": "^3.22.5",
+    "deepmerge-ts": "^8.0.2"
   }
 }

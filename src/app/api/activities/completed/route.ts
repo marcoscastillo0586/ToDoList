@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSessionUser, unauthorized } from "@/lib/auth/currentUser";
 import { COMPLETION_NOTES_INCLUDE } from "@/lib/activityHierarchy";
 import { CompletedFilterPeriod, getPeriodBounds } from "@/lib/timeUtils";
 
@@ -7,6 +8,9 @@ const VALID_PERIODS: CompletedFilterPeriod[] = ["day", "week", "month"];
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+
     const { searchParams } = new URL(request.url);
     const periodParam = (searchParams.get("period") || "day") as CompletedFilterPeriod;
     const period: CompletedFilterPeriod = VALID_PERIODS.includes(periodParam)
@@ -17,6 +21,7 @@ export async function GET(request: NextRequest) {
 
     const activities = await prisma.activity.findMany({
       where: {
+        userId: user.userId,
         actualEndDate: {
           not: null,
           gte: start,

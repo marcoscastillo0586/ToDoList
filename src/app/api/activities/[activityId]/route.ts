@@ -10,6 +10,8 @@ import {
   parseParentId,
   validateParent,
 } from "@/lib/activityHierarchy";
+import { getSessionUser, unauthorized } from "@/lib/auth/currentUser";
+import { MAX_ACTIVITY_NAME_LENGTH } from "@/lib/limits";
 
 type RouteParams = { params: Promise<{ activityId: string }> };
 
@@ -21,14 +23,17 @@ function badRequest(error: string) {
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+
     const { activityId } = await params;
     const id = Number(activityId);
     if (Number.isNaN(id)) {
       return badRequest("ID de actividad inválido.");
     }
 
-    const existing = await prisma.activity.findUnique({
-      where: { id },
+    const existing = await prisma.activity.findFirst({
+      where: { id, userId: user.userId },
       include: { _count: { select: { children: true } } },
     });
     if (!existing) {
@@ -50,6 +55,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (!nextName) {
       return badRequest("El nombre de la actividad es obligatorio.");
+    }
+    if (body.name !== undefined && nextName.length > MAX_ACTIVITY_NAME_LENGTH) {
+      return badRequest(
+        `El nombre de la actividad no puede superar los ${MAX_ACTIVITY_NAME_LENGTH} caracteres.`
+      );
     }
 
     // Observación opcional: undefined = sin cambios
@@ -233,13 +243,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
+    const user = await getSessionUser();
+    if (!user) return unauthorized();
+
     const { activityId } = await params;
     const id = Number(activityId);
     if (Number.isNaN(id)) {
       return badRequest("ID de actividad inválido.");
     }
 
-    const existing = await prisma.activity.findUnique({ where: { id } });
+    const existing = await prisma.activity.findFirst({ where: { id, userId: user.userId } });
     if (!existing) {
       return NextResponse.json(
         { error: "Actividad no encontrada." },

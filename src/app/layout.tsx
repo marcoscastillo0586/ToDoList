@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+// Las páginas se generan en cada pedido: así Next.js aplica a sus scripts el
+// nonce de la Content-Security-Policy que agrega el middleware.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Gestor de Listas y Actividades — To-Do List",
   description:
